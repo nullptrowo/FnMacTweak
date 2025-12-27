@@ -98,6 +98,28 @@ static int pt_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *
     };
     rebind_symbols(rebindings, 2);
 
+    // Restore folder access
+    NSData *bookmark = [[NSUserDefaults standardUserDefaults] dataForKey:@"fnmactweak.datafolder"];
+    if (bookmark) {
+        BOOL stale = NO;
+        NSError *error = nil;
+        NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark
+                                               options:NSURLBookmarkResolutionWithoutUI
+                                         relativeToURL:nil
+                                   bookmarkDataIsStale:&stale
+                                                 error:&error];
+        
+        if (url) {
+            if ([url startAccessingSecurityScopedResource]) {
+                NSLog(@"[FnMacTweak] Successfully restored access to: %@", url);
+            } else {
+                NSLog(@"[FnMacTweak] Failed to start accessing resource: %@", url);
+            }
+        } else {
+            NSLog(@"[FnMacTweak] Failed to resolve bookmark: %@", error);
+        }
+    }
+
     // Temporary (will remove maybe in case of keybinds support)
     TRIGGER_KEY = GCKeyCodeLeftAlt;
     POPUP_KEY = GCKeyCodeKeyP;
@@ -107,7 +129,9 @@ static int pt_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *
 
 // Initialize the popup window
 static void createPopup() {
-    popupWindow = [[UIWindow alloc] initWithFrame:CGRectMake(100, 100, 330, 350)];
+    UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication] connectedScenes].anyObject;
+    popupWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    popupWindow.frame = CGRectMake(100, 100, 330, 400);
     popupWindow.windowLevel = UIWindowLevelAlert + 1;
     popupWindow.layer.cornerRadius = 15;
     popupWindow.clipsToBounds = true;
