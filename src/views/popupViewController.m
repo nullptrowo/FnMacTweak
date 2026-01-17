@@ -1,4 +1,5 @@
 #import "./popupViewController.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #import "../globals.h"
 
@@ -62,7 +63,7 @@ static void loadSettings() {
     
     // Save Button
     UIButton* saveButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    saveButton.frame = CGRectMake(100, 240, 120, 40);
+    saveButton.frame = CGRectMake(100, 220, 120, 40);
     saveButton.backgroundColor = [UIColor colorWithRed:0.0 green:0.5 blue:1.0 alpha:1.0];
     [saveButton setTitle:@"Save Settings" forState:UIControlStateNormal];
     [saveButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -70,8 +71,18 @@ static void loadSettings() {
     [saveButton addTarget:self action:@selector(saveButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:saveButton];
     
+    // Select Folder Button
+    UIButton* folderButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    folderButton.frame = CGRectMake(65, 270, 200, 40);
+    folderButton.backgroundColor = [UIColor colorWithRed:0.5 green:0.0 blue:0.5 alpha:1.0];
+    [folderButton setTitle:@"Select Data Folder" forState:UIControlStateNormal];
+    [folderButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    folderButton.layer.cornerRadius = 8;
+    [folderButton addTarget:self action:@selector(selectFolderTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:folderButton];
+    
     // Saved feedback label (hidden initially)
-    self.savedLabel = [[UILabel alloc] initWithFrame:CGRectMake(100, 300, 120, 30)];
+    self.savedLabel = [[UILabel alloc] initWithFrame:CGRectMake(100, 320, 120, 30)];
     self.savedLabel.text = @"Saved!";
     self.savedLabel.textColor = [UIColor greenColor];
     self.savedLabel.textAlignment = NSTextAlignmentCenter;
@@ -174,6 +185,56 @@ static void loadSettings() {
     }
 
     return YES;
+}
+
+// Folder selection handler
+- (void)selectFolderTapped:(UIButton*)sender {
+    if (@available(iOS 14.0, *)) {
+        UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeFolder] asCopy:NO];
+        documentPicker.delegate = self;
+        documentPicker.allowsMultipleSelection = NO;
+        documentPicker.directoryURL = nil;
+        [self presentViewController:documentPicker animated:YES completion:nil];
+    }
+}
+
+// UIDocumentPickerDelegate
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    if (urls.count > 0) {
+        NSURL *url = urls.firstObject;
+        
+        // Start accessing the security scoped resource
+        if ([url startAccessingSecurityScopedResource]) {
+            // Create a bookmark for persistent access
+            NSError *error = nil;
+            // Force usage of security scope flag (1 << 11) to bypass availability check for iOS
+            NSURLBookmarkCreationOptions options = (NSURLBookmarkCreationOptions)(1 << 11);
+            NSData *bookmark = [url bookmarkDataWithOptions:options
+                             includingResourceValuesForKeys:nil
+                                              relativeToURL:nil
+                                                      error:&error];
+            
+            if (bookmark) {
+                [[NSUserDefaults standardUserDefaults] setObject:bookmark forKey:@"fnmactweak.datafolder"];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+                
+                // Show success message
+                self.savedLabel.text = @"Restarting...";
+                self.savedLabel.textColor = [UIColor redColor];
+                [self showSavedIndicator];
+                
+                // Exit app after delay to ensure changes take effect
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    exit(0);
+                });
+            } else {
+                NSLog(@"Error creating bookmark: %@", error);
+            }
+            
+            // Stop accessing for now (we will start again when needed)
+            [url stopAccessingSecurityScopedResource];
+        }
+    }
 }
 
 @end
