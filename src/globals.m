@@ -19,5 +19,5 @@ BOOL isMouseLocked = false;
 BOOL isAlreadyFocused = false;
 
 // UI and popup stuff
-UIWindow *popupWindow = nil;
+UIWindow* popupWindow = nil;
 BOOL isPopupVisible = false;

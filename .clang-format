@@ -1,0 +1,7 @@
+---
+PointerAlignment: Left
+UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+SpacesInContainerLiterals: false
+ColumnLimit: 120

@@ -1,23 +1,42 @@
 # FnMacTweak
 
-A lightweight iOS Theos tweak for Fortnite iOS on Mac. Implements several QoL features to improve the keyboard & mouse experience.
+⚡️ A lightweight **Theos Tweak** for Fortnite iOS on Mac, providing several quality-of-life features.
 
 ## Features
-Currently implements the following:
-- Implements pointer lock toggling using the `Left Option` key (unlocked by default)
-- Unlocks the 120 FPS setting (requires a 120Hz display, blame VSync)
-- Enables graphics preset selection (Low, Medium, High, Epic; 120 FPS limits to Medium)
-- Adds a custom options menu (keybind `P`) for adjusting mouse sensitivity
-- Fixes mouse interactions with the mobile UI
+- **Pointer Control**
+    - Toggle mouse visibility with the `Left Option` key.
+    - Allow interacting with the mobile UI normally.
+- **FPS Unlocking**
+    - Unlock 120 FPS (requires 120Hz+ display to work).
+    - *Note: Selecting 120 FPS will limit graphical quality to Medium.*
+- **Graphics Quality Selection**
+    - Unlocks all graphical presets (Low, Medium, High, Epic).
+- **Custom options menu**
+    - Toggle with the `P` key.
+    - Configure mouse sensitivity and custom data location (through the menu).
 
 ## Releases
-The latest builds can be found in the [Releases](https://github.com/rt-someone/FnMacTweak/releases/) section, as well as in the [FnMacAssistant Discord](https://discord.gg/nfEBGJBfHD).
+The latest builds can be found in [Releases](https://github.com/rt-someone/FnMacTweak/releases/)
+
+Alternatively, you can download Fortnite with the tweak already included through [FnMacAssistant](https://github.com/isacucho/FnMacAssistant)
 
 ## Building
-You can build the tweak yourself by running `make package FINALPACKAGE=1`, make sure you have Theos installed.
+
+> [!NOTE]
+> This guide assumes you already have Theos set up; if not, please refer to [Theos MacOS Installation Guide](https://theos.dev/docs/installation-macos)
+
+1. Clone the repo
+2. Build the package:
+    ```sh
+    make package
+    ```
+3. Find the compiled `.deb` in the `./packages` directory.
 
 ## Credits
-Made by: @rt2746 (me)
+Developed by: @rt2746
 
-- Uses Facebook's [Fishhook library](https://github.com/facebook/fishhook) as an alternative to %hookf hooking in a jailed environment
-- Some code taken from PlayCover's [PlayTools repository](https://github.com/PlayCover/PlayTools) for device model spoofing
+- [Fishhook](https://github.com/facebook/fishhook) - Used as an alternative to %hookf hooking in a jailed environment
+- [PlayTools](https://github.com/PlayCover/PlayTools) - For the device model spoofing code
+
+## Disclaimer
+Use at your own risk. Although unlikely, it *is* in fact still possible to get banned because of this tweak. I am **not** responsible for anything that goes wrong.
