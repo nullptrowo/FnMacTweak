@@ -7,22 +7,11 @@
 #import <GameController/GameController.h>
 #import <UIKit/UIKit.h>
 
-/* Suggestions list:
-	- remap keybinding - perfectly possible, but is it really necessary?
-	- disable invalid key chime playing on Mac - not possible as far as I know
-	- disable Esc key from unfullscreening the game - not possible as far as I know
-*/
+// --------- DEVICE SPOOFING (No tocar) ---------
 
-// --------- DEVICE SPOOFING ---------
-
-// Code largely taken from PlayCover's Playtools library:
-
-// Save original function pointers
 static int (*orig_sysctl)(int*, u_int, void*, size_t*, void*, size_t) = NULL;
 static int (*orig_sysctlbyname)(const char*, void*, size_t*, void*, size_t) = NULL;
 
-// Update output of sysctl for key values hw.machine, hw.product and hw.target to match iOS output
-// This spoofs the device type to apps allowing us to report as any iOS device
 static int pt_sysctl(int* name, u_int namelen, void* buf, size_t* size, void* arg0, size_t arg1) {
 	if (name[0] == CTL_HW && (name[1] == HW_MACHINE || name[1] == HW_PRODUCT)) {
 		if (buf == NULL) {
@@ -50,13 +39,10 @@ static int pt_sysctl(int* name, u_int namelen, void* buf, size_t* size, void* ar
 	return orig_sysctl(name, namelen, buf, size, arg0, arg1);
 }
 
-// Spoof sysctlbyname for hw.machine, hw.product, hw.model, hw.target
 static int pt_sysctlbyname(const char* name, void* oldp, size_t* oldlenp, void* newp, size_t newlen) {
 	if ((strcmp(name, "hw.machine") == 0) || (strcmp(name, "hw.product") == 0) || (strcmp(name, "hw.model") == 0)) {
 		if (oldp == NULL) {
 			int ret = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
-			// We don't want to accidentally decrease it because the real sysctl call will ENOMEM
-			// as model are much longer on Macs (eg. MacBookAir10,1)
 			if (oldlenp && *oldlenp < strlen(DEVICE_MODEL) + 1) {
 				*oldlenp = strlen(DEVICE_MODEL) + 1;
 			}
@@ -93,12 +79,10 @@ static int pt_sysctlbyname(const char* name, void* oldp, size_t* oldlenp, void* 
 // --------- CONSTRUCTOR ---------
 
 %ctor {
-	// We use Fishhook instead of the built-in stuff because we are in a jailed environment
 	struct rebinding rebindings[] = {{"sysctl", (void*)pt_sysctl, (void**)&orig_sysctl},
 									 {"sysctlbyname", (void*)pt_sysctlbyname, (void**)&orig_sysctlbyname}};
 	rebind_symbols(rebindings, 2);
 
-	// Restore folder access
 	NSData* bookmark = [[NSUserDefaults standardUserDefaults] dataForKey:@"fnmactweak.datafolder"];
 	if (bookmark) {
 		BOOL stale = NO;
@@ -110,24 +94,13 @@ static int pt_sysctlbyname(const char* name, void* oldp, size_t* oldlenp, void* 
 												 error:&error];
 
 		if (url) {
-			if ([url startAccessingSecurityScopedResource]) {
-				NSLog(@"[FnMacTweak] Successfully restored access to: %@", url);
-			} else {
-				NSLog(@"[FnMacTweak] Failed to start accessing resource: %@", url);
-			}
-		} else {
-			NSLog(@"[FnMacTweak] Failed to resolve bookmark: %@", error);
+			[url startAccessingSecurityScopedResource];
 		}
 	}
-
-	// Temporary (will remove maybe in case of keybinds support)
-	TRIGGER_KEY = GCKeyCodeLeftAlt;
-	POPUP_KEY = GCKeyCodeKeyP;
 }
 
 // --------- HELPER FUNCTIONS ---------
 
-// Initialize the popup window
 static void createPopup() {
 	UIWindowScene* scene = (UIWindowScene*)[[UIApplication sharedApplication] connectedScenes].anyObject;
 	popupWindow = [[UIWindow alloc] initWithWindowScene:scene];
@@ -140,9 +113,7 @@ static void createPopup() {
 	popupWindow.rootViewController = popupVC;
 }
 
-// Force a pointer lock update
 static void updateMouseLock(BOOL value) {
-	// Very hacky way to bypass the deprecation notice error
 	#pragma clang diagnostic push
 	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 	UIWindow* keyWindow = [UIApplication sharedApplication].keyWindow;
@@ -156,156 +127,61 @@ static void updateMouseLock(BOOL value) {
 	}
 }
 
-// --------- THEOS HOOKS ---------
+// --------- NUEVO HOOK TÁCTIL (3 DEDOS) ---------
 
-// Disable mouse movement when the mouse isn't locked
-%hook GCMouseInput
+%hook UIWindow
 
-- (void)setMouseMovedHandler:(GCMouseMoved)handler {
-	if (!handler) {
-		%orig;
-		return;
-	}
+- (void)makeKeyAndVisible {
+	%orig;
+	// Inyectamos el gesto de 3 dedos
+	UITapGestureRecognizer *threeFingerTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleMenuGesture:)];
+	threeFingerTap.numberOfTouchesRequired = 3;
+	[self addGestureRecognizer:threeFingerTap];
+}
 
-	GCMouseMoved customHandler = ^(GCMouseInput* _Nonnull eventMouse, float deltaX, float deltaY) {
-	  // Only call the original handler if the mouse is locked
-		if (isMouseLocked) {
-			// Right-click is being held, so the user is likely aiming down sights
-			if (GCMouse.current.mouseInput.rightButton.value == 1.0) {
-				handler(eventMouse, deltaX * ADS_MULTIPLIER_X / 100.0f, deltaY * ADS_MULTIPLIER_Y / 100.0f);
-			} else {
-				handler(eventMouse, deltaX * LOOK_MULTIPLIER_X / 100.0f, deltaY * LOOK_MULTIPLIER_Y / 100.0f);
-			}
+%new
+- (void)handleMenuGesture:(UITapGestureRecognizer *)sender {
+	if (sender.state == UIGestureRecognizerStateEnded) {
+		// Crear popup si no existe
+		if (!popupWindow) {
+			createPopup();
 		}
-	};
 
-	// Handle our custom method instead
-	%orig(customHandler);
-}
+		// Alternar visibilidad
+		isPopupVisible = !isPopupVisible;
+		popupWindow.hidden = !isPopupVisible;
 
-%end
-
-// Disable GameController framework mouse touch input when we're using touch input
-%hook GCControllerButtonInput
-
-- (void)setPressedChangedHandler:(GCControllerButtonValueChangedHandler)handler {
-	if (!handler) {
-		%orig;
-		return;
-	}
-
-	// Only intercept the left mouse button
-	if (self == GCMouse.current.mouseInput.leftButton) {
-		GCControllerButtonValueChangedHandler customHandler =
-			^(GCControllerButtonInput* _Nonnull button, float value, BOOL pressed) {
-			  // Only call the original handler if the mouse is locked
-				if (isMouseLocked) {
-					// Only register mouse presses once we've already clicked once, indicating that our pointer is fully
-					// "locked"; to avoid presses when the mouse isn't already hidden
-					if (isAlreadyFocused) {
-						handler(button, value, pressed);
-					} else {
-						isAlreadyFocused = true;
-					}
-				}
-			};
-
-		// Handle our custom method instead
-		%orig(customHandler);
-	} else {
-		%orig;
+		// Si mostramos el menu, desbloqueamos el mouse
+		if (isPopupVisible) {
+			isMouseLocked = false;
+			updateMouseLock(isMouseLocked);
+		}
 	}
 }
 
 %end
 
-// Press key to enable/disable mouse locking
-%hook GCKeyboardInput
+// --------- HOOKS ORIGINALES DE MOUSE/FPS ---------
 
-- (void)setKeyChangedHandler:(GCKeyboardValueChangedHandler)handler {
-	if (!handler) {
-		%orig;
-		return;
-	}
-
-	// Only execute if we're assigning it to something to avoid an error
-	GCKeyboardValueChangedHandler customHandler =
-		^(GCKeyboardInput* _Nonnull keyboard, GCControllerButtonInput* _Nonnull key, GCKeyCode keyCode, BOOL pressed) {
-			// Check whether the triggering key was pressed and wasn't released
-			if (!pressed) {
-				handler(keyboard, key, keyCode, pressed);
-				return;
-			}
-
-			if (keyCode == TRIGGER_KEY) {
-				// Don't allow us to manually control the pointer visibility if we're in the popup settings UI
-				if (isPopupVisible)
-					return;
-
-				// Toggle mouse-pointer functionality and request an update
-				isMouseLocked = !isMouseLocked;
-
-				updateMouseLock(isMouseLocked);
-			} else if (keyCode == POPUP_KEY) {
-				if (!popupWindow) {
-					// Create window if it doesn't exist yet
-					createPopup();
-				}
-
-				// Toggle visibility
-				isPopupVisible = !isPopupVisible;
-				popupWindow.hidden = !isPopupVisible;
-
-				// Show mouse
-				isMouseLocked = false;
-				updateMouseLock(isMouseLocked);
-			} else {
-				// Idk, is this really necessary??
-				// if (!isMouseLocked) return;
-
-				// Call the original handler (equivalent to %orig)
-				handler(keyboard, key, keyCode, pressed);
-			}
-		};
-
-	// Handle our custom method instead
-	%orig(customHandler);
-}
-
-%end
-
-// Disable pointer "locking" mechanism, see UE source code for reference (IOSView.cpp)
 %hook IOSViewController
-
 - (BOOL)prefersPointerLocked {
 	return isMouseLocked;
 }
-
 %end
 
-// Enable 120 frames per second on any screen
 %hook UIScreen
-
 - (NSInteger)maximumFramesPerSecond {
 	return 120;
 }
-
 %end
 
-// See UE source code for reference (IOSView.cpp); normally mouse clicks get ignored, so trick the game into thinking
-// they're touchscreen clicks
 %hook UITouch
-
 - (UITouchType)type {
 	UITouchType _original = %orig;
-
-	// UITouchTypeIndirectPointer = 3
 	if (!isMouseLocked && _original == UITouchTypeIndirectPointer) {
-		// UITouchTypeDirect = 0
 		return UITouchTypeDirect;
 	} else {
 		return _original;
 	}
 }
-
 %end
