@@ -1,31 +1,42 @@
-name: Build iOS Tweak
+name: Build FnMacTweak
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+on: [push]
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-      - name: Install Theos
-        run: |
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
-          echo "THEOS=~/theos" >> $GITHUB_ENV
+    - name: Install Theos & SDK & ldid
+      run: |
+        # 1. Instalar Theos
+        git clone --recursive https://github.com/theos/theos.git $HOME/theos
+        
+        # 2. Descargar SDKs (Vital para compilar para iOS)
+        curl -LO https://github.com/theos/sdks/archive/master.zip
+        unzip -q master.zip
+        mkdir -p $HOME/theos/sdks
+        mv sdks-master/*.sdk $HOME/theos/sdks/
+        rm -r sdks-master master.zip
+        
+        # 3. Instalar LDID (Para firmar el paquete)
+        brew install ldid
+        mkdir -p $HOME/theos/bin
+        ln -s $(which ldid) $HOME/theos/bin/ldid
 
-      - name: Build Package
-        run: |
-          export THEOS=~/theos
-          make package FINALPACKAGE=1
-          
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: FnMacTweak_DEB
-          path: packages/*.deb
+    - name: Compile
+      run: |
+        export THEOS=$HOME/theos
+        # Compilar forzando arm64 (iPhone)
+        make package FINALPACKAGE=1 ARCHS=arm64
+        
+    - name: Upload Build
+      uses: actions/upload-artifact@v4
+      with:
+        name: FnMacTweak_Files
+        path: |
+          packages/*.deb
+          .theos/obj/debug/arm64/*.dylib
